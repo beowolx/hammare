@@ -3,9 +3,11 @@ use termion::raw::IntoRawMode;
 
 fn to_ctrl_byte(c: char) -> u8 {
     let byte = c as u8;
-    byte & 0b11010
-    // 0b1111010
-    // byte & 0b0001_1111
+    byte & 0b0001_1111
+}
+
+fn die(e: std::io::Error) {
+    panic!("{e}");
 }
 
 fn main() {
@@ -14,17 +16,22 @@ fn main() {
         .expect("Error while entering raw mode");
 
     for b in io::stdin().bytes() {
-        let b = b.expect("Error while unpacking stdin bytes");
-        let c = b as char;
-        if c.is_control() {
-            println!("{:#b}", b);
-            println!("{b} \r")
-        } else {
-            println!("{:#b}", b);
-            println!("{b}, ({c})\r")
-        }
-        if b == to_ctrl_byte('q') {
-            break;
+        match b {
+            Ok(b) => {
+                let c = b as char;
+                if c.is_control() {
+                    println!("{:?} \r", b);
+                } else {
+                    println!("{:?} ({})\r", b, c);
+                }
+                // if b == to_ctrl_byte('q') {
+                //     break;
+                // }
+                if b == b'q' {
+                    break;
+                }
+            }
+            Err(err) => die(err),
         }
     }
 }

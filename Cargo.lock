@@ -13,6 +13,7 @@ name = "hammare"
 version = "0.1.0"
 dependencies = [
  "termion",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -56,3 +57,9 @@ dependencies = [
  "redox_syscall",
  "redox_termios",
 ]
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e8820f5d777f6224dc4be3632222971ac30164d4a258d595640799554ebfd99"

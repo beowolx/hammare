@@ -1,6 +1,7 @@
-use std::fs;
-
+use crate::Position;
 use crate::Row;
+use std::cmp::Ordering;
+use std::fs;
 
 #[derive(Default)]
 pub struct Document {
@@ -38,5 +39,60 @@ impl Document {
     #[must_use]
     pub fn len(&self) -> usize {
         self.rows.len()
+    }
+
+    fn insert_newline(&mut self, at: &Position) {
+        if at.y > self.len() {
+            return;
+        }
+        if at.y == self.len() {
+            self.rows.push(Row::default());
+            return;
+        }
+        let new_row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index").split(at.x);
+        self.rows.insert(at.y + 1, new_row);
+    }
+
+    /// Inserts a character in the document that is being read, at the position
+    /// where the cursor is.
+    ///
+    /// # Panics
+    ///
+    /// It will panic if we try to insert in a position that is greater
+    /// than the length of the document.
+    pub fn insert(&mut self, at: &Position, c: char) {
+        if c == '\n' {
+            self.insert_newline(at);
+            return;
+        }
+        match at.y.cmp(&self.len()) {
+            Ordering::Equal => {
+                let mut row = Row::default();
+                row.insert(0, c);
+                self.rows.push(row);
+            }
+            Ordering::Less => {
+                let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
+                row.insert(at.x, c);
+            }
+            Ordering::Greater => {
+                panic!("Insert characters pass the document's length is not possible.")
+            }
+        }
+    }
+
+    pub fn delete(&mut self, at: &Position) {
+        let len = self.len();
+        if at.y >= len {
+            return;
+        }
+        if at.x == self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index").len() && at.y < len - 1 {
+            let next_row = self.rows.remove(at.y + 1);
+            let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
+            row.append(&next_row);
+        } else {
+            let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
+            row.delete(at.x);
+        }
     }
 }

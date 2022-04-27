@@ -2,6 +2,7 @@ use crate::Position;
 use crate::Row;
 use std::cmp::Ordering;
 use std::fs;
+use std::io::{Error, Write};
 
 #[derive(Default)]
 pub struct Document {
@@ -81,6 +82,8 @@ impl Document {
         }
     }
 
+    /// Deletes a single or multiple characters in the document
+    ///
     pub fn delete(&mut self, at: &Position) {
         let len = self.len();
         if at.y >= len {
@@ -94,5 +97,22 @@ impl Document {
             let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
             row.delete(at.x);
         }
+    }
+
+    /// Saves the changes in the document
+    ///
+    /// # Errors
+    ///
+    /// It will return `Err` if `file_name` does not exist or the user
+    /// does not have the permission to write to it
+    pub fn save(&self) -> Result<(), Error> {
+        if let Some(file_name) = &self.file_name {
+            let mut file = fs::File::create(file_name)?;
+            for row in &self.rows {
+                file.write_all(row.as_bytes())?;
+                file.write_all(b"\n")?;
+            }
+        }
+        Ok(())
     }
 }

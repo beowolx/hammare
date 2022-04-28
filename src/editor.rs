@@ -10,6 +10,7 @@ use termion::event::Key;
 const STATUS_FG_COLOR: color::Rgb = color::Rgb(63, 63, 63);
 const STATUS_BG_COLOR: color::Rgb = color::Rgb(239, 239, 239);
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const QUIT_TIMES: u8 = 3;
 
 #[derive(Default)]
 pub struct Position {
@@ -37,7 +38,8 @@ pub struct Editor {
     cursor_position: Position,
     offset: Position,
     document: Document,
-    status_messsage: StatusMessage,
+    status_message: StatusMessage,
+    quit_times: u8,
 }
 
 impl Editor {
@@ -76,8 +78,9 @@ impl Editor {
             terminal: Terminal::default().expect("Failed to initialize terminal"),
             cursor_position: Position::default(),
             offset: Position::default(),
-            status_messsage: StatusMessage::from(initial_status),
             document,
+            status_message: StatusMessage::from(initial_status),
+            quit_times: QUIT_TIMES,
         }
     }
 
@@ -104,27 +107,38 @@ impl Editor {
         if self.document.file_name.is_none() {
             let new_name = self.prompt("Save as: ").unwrap_or(None);
             if new_name.is_none() {
-                self.status_messsage = StatusMessage::from("Save aborted.".to_string());
+                self.status_message = StatusMessage::from("Save aborted.".to_string());
                 return;
             }
             self.document.file_name = new_name;
         }
 
         if self.document.save().is_ok() {
-            self.status_messsage = StatusMessage::from("File saved successfully.".to_string());
+            self.status_message = StatusMessage::from("File saved successfully.".to_string());
         } else {
-            self.status_messsage = StatusMessage::from("Error writing file!".to_string());
+            self.status_message = StatusMessage::from("Error writing file!".to_string());
         }
     }
 
     fn draw_status_bar(&self) {
         let width = self.terminal.size().width as usize;
+        let modified_indicator = if self.document.is_dirty() {
+            " (modified)"
+        } else {
+            ""
+        };
+
         let mut file_name = "[No Name]".to_string();
         if let Some(name) = &self.document.file_name {
             file_name = name.clone();
             file_name.truncate(20);
         }
-        let mut status = format!("{} - {} lines", file_name, self.document.len());
+        let mut status = format!(
+            "{} - {} lines{}",
+            file_name,
+            self.document.len(),
+            modified_indicator
+        );
         let line_indicator = format!(
             "{}/{}",
             self.cursor_position.y.saturating_add(1),
@@ -145,7 +159,7 @@ impl Editor {
 
     fn draw_message_bar(&self) {
         Terminal::clear_current_line();
-        let message = &self.status_messsage;
+        let message = &self.status_message;
         if Instant::now() - message.time < Duration::new(5, 0) {
             let mut text = message.text.clone();
             text.truncate(self.terminal.size().width as usize);
@@ -156,7 +170,17 @@ impl Editor {
     fn process_keypress(&mut self) -> Result<(), std::io::Error> {
         let pressed_key = Terminal::read_key()?;
         match pressed_key {
-            Key::Ctrl('t') => self.should_quit = true,
+            Key::Ctrl('t') => {
+                if self.quit_times > 0 && self.document.is_dirty() {
+                    self.status_message = StatusMessage::from(format!(
+                        "WARNING! File has unsaved changes. Press Ctrl-T {} more times to quit.",
+                        self.quit_times
+                    ));
+                    self.quit_times -= 1;
+                    return Ok(());
+                }
+                self.should_quit = true;
+            }
             Key::Ctrl('s') => self.save(),
             Key::Char(c) => {
                 self.document.insert(&self.cursor_position, c);
@@ -180,6 +204,10 @@ impl Editor {
             _ => (),
         }
         self.scroll();
+        if self.quit_times < QUIT_TIMES {
+            self.quit_times = QUIT_TIMES;
+            self.status_message = StatusMessage::from(String::new());
+        }
         Ok(())
     }
 
@@ -303,7 +331,7 @@ impl Editor {
     fn prompt(&mut self, prompt: &str) -> Result<Option<String>, std::io::Error> {
         let mut result = String::new();
         loop {
-            self.status_messsage = StatusMessage::from(format!("{}{}", prompt, result));
+            self.status_message = StatusMessage::from(format!("{}{}", prompt, result));
             self.refresh_screen()?;
 
             match Terminal::read_key()? {
@@ -325,7 +353,7 @@ impl Editor {
                 _ => (),
             }
         }
-        self.status_messsage = StatusMessage::from(String::new());
+        self.status_message = StatusMessage::from(String::new());
         if result.is_empty() {
             return Ok(None);
         }

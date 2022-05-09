@@ -2,6 +2,7 @@ use crate::Document;
 use crate::Row;
 use crate::Terminal;
 use std::env;
+use std::process;
 use std::time::Duration;
 use std::time::Instant;
 use termion::color;
@@ -13,6 +14,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const QUIT_TIMES: u8 = 3;
 
 #[derive(Default)]
+#[non_exhaustive]
 pub struct Position {
     pub x: usize,
     pub y: usize,
@@ -59,11 +61,11 @@ impl Editor {
 
     pub fn default() -> Self {
         let args: Vec<String> = env::args().collect();
-        let mut initial_status = String::from("HELP: Ctrl-S = save 🤖 | Ctrl-T = quit ☠️");
-        let document = if args.len() > 1 {
-            let file_name = &args[1];
-            let doc = Document::open(file_name);
+        let mut initial_status =
+            String::from("HELP: Ctrl-S = save \u{1f916} | Ctrl-T = quit \u{2620}\u{fe0f}");
 
+        let document = if let Some(file_name) = args.get(1) {
+            let doc = Document::open(file_name);
             if let Ok(doc) = doc {
                 doc
             } else {
@@ -73,6 +75,7 @@ impl Editor {
         } else {
             Document::default()
         };
+
         Self {
             should_quit: false,
             terminal: Terminal::default().expect("Failed to initialize terminal"),
@@ -89,7 +92,7 @@ impl Editor {
         Terminal::cursor_position(&Position::default());
         if self.should_quit {
             Terminal::clear_screen();
-            println!("May the force be with you ⚡️\r");
+            println!("May the force be with you \u{26a1}\u{fe0f}\r");
         } else {
             self.draw_rows();
             self.draw_status_bar();
@@ -107,29 +110,34 @@ impl Editor {
         if self.document.file_name.is_none() {
             let new_name = self.prompt("Save as: ").unwrap_or(None);
             if new_name.is_none() {
-                self.status_message = StatusMessage::from("Save aborted.".to_string());
+                self.status_message = StatusMessage::from("Save aborted.".to_owned());
                 return;
             }
             self.document.file_name = new_name;
         }
 
         if self.document.save().is_ok() {
-            self.status_message = StatusMessage::from("File saved successfully.".to_string());
+            self.status_message = StatusMessage::from("File saved successfully.".to_owned());
         } else {
-            self.status_message = StatusMessage::from("Error writing file!".to_string());
+            self.status_message = StatusMessage::from("Error writing file!".to_owned());
         }
     }
 
     fn draw_status_bar(&self) {
-        let width = self.terminal.size().width as usize;
+        let width: usize = self
+            .terminal
+            .size()
+            .width
+            .try_into()
+            .expect("Failed converting terminal size to usize");
         let modified_indicator = if self.document.is_dirty() {
             " (modified)"
         } else {
             ""
         };
 
-        let mut file_name = "[No Name]".to_string();
-        if let Some(name) = &self.document.file_name {
+        let mut file_name = "[No Name]".to_owned();
+        if let Some(ref name) = self.document.file_name {
             file_name = name.clone();
             file_name.truncate(20);
         }
@@ -144,10 +152,9 @@ impl Editor {
             self.cursor_position.y.saturating_add(1),
             self.document.len()
         );
+        #[allow(clippy::integer_arithmetic)]
         let len = status.len() + line_indicator.len();
-        if width > len {
-            status.push_str(&" ".repeat(width - len));
-        }
+        status.push_str(&" ".repeat(width.saturating_sub(len)));
         status = format!("{}{}", status, line_indicator);
         status.truncate(width);
         Terminal::set_bg_color(STATUS_BG_COLOR);
@@ -162,7 +169,13 @@ impl Editor {
         let message = &self.status_message;
         if Instant::now() - message.time < Duration::new(5, 0) {
             let mut text = message.text.clone();
-            text.truncate(self.terminal.size().width as usize);
+            text.truncate(
+                self.terminal
+                    .size()
+                    .width
+                    .try_into()
+                    .expect("Failed converting terminal size to usize"),
+            );
             print!("{}", text);
         }
     }
@@ -176,7 +189,7 @@ impl Editor {
                         "WARNING! File has unsaved changes. Press Ctrl-T {} more times to quit.",
                         self.quit_times
                     ));
-                    self.quit_times -= 1;
+                    self.quit_times = self.quit_times.saturating_sub(1);
                     return Ok(());
                 }
                 self.should_quit = true;
@@ -213,8 +226,18 @@ impl Editor {
 
     fn scroll(&mut self) {
         let Position { x, y } = self.cursor_position;
-        let width = self.terminal.size().width as usize;
-        let height = self.terminal.size().height as usize;
+        let width = self
+            .terminal
+            .size()
+            .width
+            .try_into()
+            .expect("Failed converting terminal size to usize");
+        let height = self
+            .terminal
+            .size()
+            .height
+            .try_into()
+            .expect("Failed converting terminal size to usize");
         let mut offset = &mut self.offset;
 
         if y < offset.y {
@@ -231,7 +254,12 @@ impl Editor {
     }
 
     fn move_cursor(&mut self, key: Key) {
-        let terminal_height = self.terminal.size().height as usize;
+        let terminal_height = self
+            .terminal
+            .size()
+            .height
+            .try_into()
+            .expect("Failed converting terminal size to usize");
         let Position { mut x, mut y } = self.cursor_position;
         let height = self.document.len();
         let mut width = if let Some(row) = self.document.row(y) {
@@ -248,9 +276,9 @@ impl Editor {
             }
             Key::Left => {
                 if x > 0 {
-                    x -= 1;
+                    x = x.saturating_sub(1);
                 } else if y > 0 {
-                    y -= 1;
+                    y = y.saturating_sub(1);
                     if let Some(row) = self.document.row(y) {
                         x = row.len();
                     } else {
@@ -260,22 +288,22 @@ impl Editor {
             }
             Key::Right => {
                 if x < width {
-                    x += 1;
+                    x = x.saturating_add(1);
                 } else if y < height {
-                    y += 1;
+                    y = y.saturating_add(1);
                     x = 0;
                 }
             }
             Key::PageUp => {
                 y = if y > terminal_height {
-                    y - terminal_height
+                    y.saturating_sub(terminal_height)
                 } else {
                     0
                 }
             }
             Key::PageDown => {
                 y = if y.saturating_add(terminal_height) < height {
-                    y + terminal_height as usize
+                    y.saturating_add(terminal_height)
                 } else {
                     height
                 }
@@ -296,10 +324,18 @@ impl Editor {
     }
 
     fn draw_welcome_message(&self) {
-        let mut welcome_message = format!("Welcome to Hammare Editor 🔨 -- version {VERSION}");
-        let width = self.terminal.size().width as usize;
+        let mut welcome_message =
+            format!("Welcome to Hammare Editor \u{1f528} -- version {VERSION}");
+        let width: usize = self
+            .terminal
+            .size()
+            .width
+            .try_into()
+            .expect("Failed converting terminal size to usize");
         let len = welcome_message.len();
+
         let padding = width.saturating_sub(len) / 2;
+
         let spaces = "  ".repeat(padding.saturating_sub(1));
         welcome_message = format!("~{spaces}{welcome_message}");
         welcome_message.truncate(width);
@@ -307,9 +343,14 @@ impl Editor {
     }
 
     pub fn draw_row(&self, row: &Row) {
-        let width = self.terminal.size().width as usize;
+        let width = self
+            .terminal
+            .size()
+            .width
+            .try_into()
+            .expect("Failed converting terminal size to usize");
         let start = self.offset.x;
-        let end = self.offset.x + width;
+        let end = self.offset.x.saturating_add(width);
         let row = row.render(start, end);
         println!("{}\r", row);
     }
@@ -318,7 +359,13 @@ impl Editor {
         let height = self.terminal.size().height;
         for terminal_row in 0..height {
             Terminal::clear_current_line();
-            if let Some(row) = self.document.row(terminal_row as usize + self.offset.y) {
+            if let Some(row) = self.document.row(
+                self.offset.y.saturating_add(
+                    terminal_row
+                        .try_into()
+                        .expect("Failed trying to convert terminal_row into usize"),
+                ),
+            ) {
                 self.draw_row(row);
             } else if self.document.is_empty() && terminal_row == height / 3 {
                 self.draw_welcome_message();
@@ -335,11 +382,7 @@ impl Editor {
             self.refresh_screen()?;
 
             match Terminal::read_key()? {
-                Key::Backspace => {
-                    if !result.is_empty() {
-                        result.truncate(result.len() - 1);
-                    }
-                }
+                Key::Backspace => result.truncate(result.len().saturating_sub(1)),
                 Key::Char('\n') => break,
                 Key::Char(c) => {
                     if !c.is_control() {
@@ -363,5 +406,7 @@ impl Editor {
 
 fn die(e: &std::io::Error) {
     Terminal::clear_screen();
-    panic!("{e}");
+    eprintln!("Unexpected behaviour while quitting the program. {e}");
+    #[allow(clippy::exit)]
+    process::exit(1)
 }

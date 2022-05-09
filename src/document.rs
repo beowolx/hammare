@@ -24,7 +24,7 @@ impl Document {
         }
         Ok(Self {
             rows,
-            file_name: Some(filename.to_string()),
+            file_name: Some(filename.to_owned()),
             dirty: false,
         })
     }
@@ -45,11 +45,17 @@ impl Document {
     }
 
     fn insert_newline(&mut self, at: &Position) {
-        if at.y == self.len() {
+        if at.y > self.rows.len() {
+            return;
+        }
+        if at.y == self.rows.len() {
             self.rows.push(Row::default());
             return;
         }
+
         let new_row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index").split(at.x);
+
+        #[allow(clippy::integer_arithmetic)]
         self.rows.insert(at.y + 1, new_row);
     }
 
@@ -60,8 +66,9 @@ impl Document {
     ///
     /// It will panic if we try to insert in a position that is greater
     /// than the length of the document.
+    #[allow(clippy::panic)]
     pub fn insert(&mut self, at: &Position, c: char) {
-        if at.y > self.len() {
+        if at.y > self.rows.len() {
             return;
         }
         self.dirty = true;
@@ -69,7 +76,7 @@ impl Document {
             self.insert_newline(at);
             return;
         }
-        match at.y.cmp(&self.len()) {
+        match at.y.cmp(&self.rows.len()) {
             Ordering::Equal => {
                 let mut row = Row::default();
                 row.insert(0, c);
@@ -86,14 +93,14 @@ impl Document {
     }
 
     /// Deletes a single or multiple characters in the document
-    ///
+    #[allow(clippy::integer_arithmetic)]
     pub fn delete(&mut self, at: &Position) {
-        let len = self.len();
+        let len = self.rows.len();
         if at.y >= len {
             return;
         }
         self.dirty = true;
-        if at.x == self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index").len() && at.y < len - 1 {
+        if at.x == self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index").len() && at.y + 1 < len {
             let next_row = self.rows.remove(at.y + 1);
             let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
             row.append(&next_row);
@@ -110,7 +117,7 @@ impl Document {
     /// It will return `Err` if `file_name` does not exist or the user
     /// does not have the permission to write to it
     pub fn save(&mut self) -> Result<(), Error> {
-        if let Some(file_name) = &self.file_name {
+        if let Some(ref file_name) = self.file_name {
             let mut file = fs::File::create(file_name)?;
             for row in &self.rows {
                 file.write_all(row.as_bytes())?;

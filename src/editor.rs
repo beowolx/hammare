@@ -61,8 +61,9 @@ impl Editor {
 
     pub fn default() -> Self {
         let args: Vec<String> = env::args().collect();
-        let mut initial_status =
-            String::from("HELP: Ctrl-S = save \u{1f916} | Ctrl-T = quit \u{2620}\u{fe0f}");
+        let mut initial_status = String::from(
+            "HELP: Ctrl-F = find \u{1f50d} | Ctrl-S = save \u{1f916} | Ctrl-T = quit \u{2620}\u{fe0f}",
+        );
 
         let document = if let Some(file_name) = args.get(1) {
             let doc = Document::open(file_name);
@@ -180,6 +181,7 @@ impl Editor {
         }
     }
 
+    #[allow(clippy::string_slice)]
     fn process_keypress(&mut self) -> Result<(), std::io::Error> {
         let pressed_key = Terminal::read_key()?;
         match pressed_key {
@@ -195,6 +197,15 @@ impl Editor {
                 self.should_quit = true;
             }
             Key::Ctrl('s') => self.save(),
+            Key::Ctrl('f') => {
+                if let Some(query) = self.prompt("Search: ").unwrap_or(None) {
+                    if let Some(position) = self.document.find(&query[..]) {
+                        self.cursor_position = position;
+                    } else {
+                        self.status_message = StatusMessage::from(format!("Not found: {query}."));
+                    }
+                }
+            }
             Key::Char(c) => {
                 self.document.insert(&self.cursor_position, c);
                 self.move_cursor(Key::Right);

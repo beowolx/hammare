@@ -15,6 +15,7 @@ pub struct Terminal {
     _stdout: RawTerminal<std::io::Stdout>,
 }
 
+#[allow(clippy::unwrap_in_result)]
 impl Terminal {
     /// Generates a default terminal size
     ///
@@ -46,13 +47,13 @@ impl Terminal {
     }
 
     /// Set the cursor position on the terminal
-    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::pattern_type_mismatch)]
     pub fn cursor_position(position: &Position) {
         let Position { mut x, mut y } = position;
         x = x.saturating_add(1);
         y = y.saturating_add(1);
-        let x = x as u16;
-        let y = y as u16;
+        let x = x.try_into().expect("Failed to convert to u16");
+        let y = y.try_into().expect("Failed to convert to u16");
         print!("{}", termion::cursor::Goto(x, y));
     }
 

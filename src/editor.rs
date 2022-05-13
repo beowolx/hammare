@@ -52,6 +52,7 @@ pub struct Editor {
 }
 
 impl Editor {
+    /// Runs the editor
     pub fn run(&mut self) {
         loop {
             if let Err(error) = self.refresh_screen() {
@@ -66,6 +67,7 @@ impl Editor {
         }
     }
 
+    /// Generates a default `Editor` structure
     pub fn default() -> Self {
         let args: Vec<String> = env::args().collect();
         let mut initial_status = String::from(
@@ -390,6 +392,7 @@ impl Editor {
         println!("{}\r", welcome_message);
     }
 
+    /// Draw a single row based on the cursor position
     pub fn draw_row(&self, row: &Row) {
         let width = self
             .terminal

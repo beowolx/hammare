@@ -30,17 +30,20 @@ impl Document {
         })
     }
 
+    /// Gets the row based on an `index`
     #[must_use]
     pub fn row(&self, index: usize) -> Option<&Row> {
         self.rows.get(index)
     }
 
+    /// Check if `rows` is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.rows.is_empty()
     }
 
     #[must_use]
+    /// Get the length of `rows`
     pub fn len(&self) -> usize {
         self.rows.len()
     }
@@ -129,11 +132,14 @@ impl Document {
         Ok(())
     }
 
+    /// Returns a boolean indicating if the document has been changed or not
     #[must_use]
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
 
+    /// Returns an option with the elements that corresponds to a certain
+    /// search query passed
     #[must_use]
     pub fn find(&self, query: &str, at: &Position, direction: SearchDirection) -> Option<Position> {
         if at.y >= self.rows.len() {

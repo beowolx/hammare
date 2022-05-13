@@ -1,5 +1,5 @@
 use crate::Position;
-use std::io::{self, stdout, Write};
+use std::io::{self, stdout, Error, ErrorKind, Write};
 use termion::color;
 use termion::event::Key;
 use termion::input::TermRead;
@@ -15,7 +15,6 @@ pub struct Terminal {
     _stdout: RawTerminal<std::io::Stdout>,
 }
 
-#[allow(clippy::unwrap_in_result)]
 impl Terminal {
     /// Generates a default terminal size
     ///
@@ -23,17 +22,27 @@ impl Terminal {
     /// It will return `Err` if `termion::terminal_size()`
     /// fails to get the terminal's size
     pub fn default() -> Result<Self, std::io::Error> {
-        let size = termion::terminal_size()
-            .expect("Something unexpected happened while trying to get terminal's size.");
-        Ok(Self {
-            size: Size {
-                width: size.0,
-                height: size.1.saturating_sub(2),
-            },
-            _stdout: stdout()
-                .into_raw_mode()
-                .expect("Something unexpected happening while entering raw mode."),
-        })
+        if let Ok(size) = termion::terminal_size() {
+            if let Ok(raw_terminal) = stdout().into_raw_mode() {
+                Ok(Self {
+                    size: Size {
+                        width: size.0,
+                        height: size.1.saturating_sub(2),
+                    },
+                    _stdout: raw_terminal,
+                })
+            } else {
+                Err(Error::new(
+                    ErrorKind::Other,
+                    "Something unexpected happening while trying to enter raw mode",
+                ))
+            }
+        } else {
+            Err(Error::new(
+                ErrorKind::Other,
+                "Something unexpected happening while trying to get the terminal size.",
+            ))
+        }
     }
     #[must_use]
     /// Returns a read-only reference to the internal `size`
@@ -47,9 +56,8 @@ impl Terminal {
     }
 
     /// Set the cursor position on the terminal
-    #[allow(clippy::pattern_type_mismatch)]
     pub fn cursor_position(position: &Position) {
-        let Position { mut x, mut y } = position;
+        let Position { mut x, mut y } = *position;
         x = x.saturating_add(1);
         y = y.saturating_add(1);
         let x = x.try_into().expect("Failed to convert to u16");
@@ -72,18 +80,22 @@ impl Terminal {
         print!("{}", termion::clear::CurrentLine);
     }
 
+    /// Sets the background color
     pub fn set_bg_color(color: color::Rgb) {
         print!("{}", color::Bg(color));
     }
 
+    /// Resets the background color
     pub fn reset_bg_color() {
         print!("{}", color::Bg(color::Reset));
     }
 
+    /// Sets the foreground color
     pub fn set_fg_color(color: color::Rgb) {
         print!("{}", color::Fg(color));
     }
 
+    /// Resets the foreground color
     pub fn reset_fg_color() {
         print!("{}", color::Fg(color::Reset));
     }

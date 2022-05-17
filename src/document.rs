@@ -21,7 +21,9 @@ impl Document {
         let contents = fs::read_to_string(filename)?;
         let mut rows = Vec::new();
         for value in contents.lines() {
-            rows.push(Row::from(value));
+            let mut row = Row::from(value);
+            row.highlight();
+            rows.push(row);
         }
         Ok(Self {
             rows,
@@ -57,10 +59,16 @@ impl Document {
             return;
         }
 
-        let new_row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index").split(at.x);
+        let current_row = self
+            .rows
+            .get_mut(at.y)
+            .expect("Something unexpected happened while trying to index rows.");
 
-        #[allow(clippy::integer_arithmetic)]
-        self.rows.insert(at.y + 1, new_row);
+        let mut new_row = current_row.split(at.x);
+        current_row.highlight();
+        new_row.highlight();
+
+        self.rows.insert(at.y.saturating_add(1), new_row);
     }
 
     /// Inserts a character in the document that is being read, at the position
@@ -83,12 +91,14 @@ impl Document {
         match at.y.cmp(&self.rows.len()) {
             Ordering::Equal => {
                 let mut row = Row::default();
+                row.highlight();
                 row.insert(0, c);
                 self.rows.push(row);
             }
             Ordering::Less => {
                 let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
                 row.insert(at.x, c);
+                row.highlight();
             }
             Ordering::Greater => {
                 panic!("Insert characters pass the document's length is not possible.")
@@ -108,9 +118,11 @@ impl Document {
             let next_row = self.rows.remove(at.y + 1);
             let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
             row.append(&next_row);
+            row.highlight();
         } else {
             let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
             row.delete(at.x);
+            row.highlight();
         }
     }
 

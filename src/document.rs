@@ -22,7 +22,7 @@ impl Document {
         let mut rows = Vec::new();
         for value in contents.lines() {
             let mut row = Row::from(value);
-            row.highlight();
+            row.highlight(None);
             rows.push(row);
         }
         Ok(Self {
@@ -65,8 +65,8 @@ impl Document {
             .expect("Something unexpected happened while trying to index rows.");
 
         let mut new_row = current_row.split(at.x);
-        current_row.highlight();
-        new_row.highlight();
+        current_row.highlight(None);
+        new_row.highlight(None);
 
         self.rows.insert(at.y.saturating_add(1), new_row);
     }
@@ -91,14 +91,14 @@ impl Document {
         match at.y.cmp(&self.rows.len()) {
             Ordering::Equal => {
                 let mut row = Row::default();
-                row.highlight();
+                row.highlight(None);
                 row.insert(0, c);
                 self.rows.push(row);
             }
             Ordering::Less => {
                 let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
                 row.insert(at.x, c);
-                row.highlight();
+                row.highlight(None);
             }
             Ordering::Greater => {
                 panic!("Insert characters pass the document's length is not possible.")
@@ -118,11 +118,11 @@ impl Document {
             let next_row = self.rows.remove(at.y + 1);
             let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
             row.append(&next_row);
-            row.highlight();
+            row.highlight(None);
         } else {
             let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
             row.delete(at.x);
-            row.highlight();
+            row.highlight(None);
         }
     }
 
@@ -142,6 +142,14 @@ impl Document {
             self.dirty = false;
         }
         Ok(())
+    }
+
+    /// Loop over the rows and highligh the words that correspond
+    /// the word that was passed as a parameter.
+    pub fn highlight(&mut self, word: Option<&str>) {
+        for row in &mut self.rows {
+            row.highlight(word);
+        }
     }
 
     /// Returns a boolean indicating if the document has been changed or not

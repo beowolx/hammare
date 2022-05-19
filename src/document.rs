@@ -1,3 +1,4 @@
+use crate::FileType;
 use crate::Position;
 use crate::Row;
 use crate::SearchDirection;
@@ -10,6 +11,7 @@ pub struct Document {
     rows: Vec<Row>,
     pub file_name: Option<String>,
     dirty: bool,
+    file_type: FileType,
 }
 
 impl Document {
@@ -19,17 +21,25 @@ impl Document {
     /// It will return `Err` if it fails to open the file
     pub fn open(filename: &str) -> Result<Self, std::io::Error> {
         let contents = fs::read_to_string(filename)?;
+        let file_type = FileType::from(filename);
         let mut rows = Vec::new();
         for value in contents.lines() {
             let mut row = Row::from(value);
-            row.highlight(None);
+            row.highlight(file_type.highlighting_options(), None);
             rows.push(row);
         }
         Ok(Self {
             rows,
             file_name: Some(filename.to_owned()),
             dirty: false,
+            file_type,
         })
+    }
+
+    /// Gets the name of the file that we are opening on the editor
+    #[must_use]
+    pub fn file_type(&self) -> String {
+        self.file_type.name()
     }
 
     /// Gets the row based on an `index`
@@ -65,8 +75,8 @@ impl Document {
             .expect("Something unexpected happened while trying to index rows.");
 
         let mut new_row = current_row.split(at.x);
-        current_row.highlight(None);
-        new_row.highlight(None);
+        current_row.highlight(self.file_type.highlighting_options(), None);
+        new_row.highlight(self.file_type.highlighting_options(), None);
 
         self.rows.insert(at.y.saturating_add(1), new_row);
     }
@@ -91,14 +101,14 @@ impl Document {
         match at.y.cmp(&self.rows.len()) {
             Ordering::Equal => {
                 let mut row = Row::default();
-                row.highlight(None);
+                row.highlight(self.file_type.highlighting_options(), None);
                 row.insert(0, c);
                 self.rows.push(row);
             }
             Ordering::Less => {
                 let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
                 row.insert(at.x, c);
-                row.highlight(None);
+                row.highlight(self.file_type.highlighting_options(), None);
             }
             Ordering::Greater => {
                 panic!("Insert characters pass the document's length is not possible.")
@@ -118,11 +128,11 @@ impl Document {
             let next_row = self.rows.remove(at.y + 1);
             let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
             row.append(&next_row);
-            row.highlight(None);
+            row.highlight(self.file_type.highlighting_options(), None);
         } else {
             let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
             row.delete(at.x);
-            row.highlight(None);
+            row.highlight(self.file_type.highlighting_options(), None);
         }
     }
 
@@ -135,9 +145,11 @@ impl Document {
     pub fn save(&mut self) -> Result<(), Error> {
         if let Some(ref file_name) = self.file_name {
             let mut file = fs::File::create(file_name)?;
-            for row in &self.rows {
+            self.file_type = FileType::from(file_name);
+            for row in &mut self.rows {
                 file.write_all(row.as_bytes())?;
                 file.write_all(b"\n")?;
+                row.highlight(self.file_type.highlighting_options(), None);
             }
             self.dirty = false;
         }
@@ -148,7 +160,7 @@ impl Document {
     /// the word that was passed as a parameter.
     pub fn highlight(&mut self, word: Option<&str>) {
         for row in &mut self.rows {
-            row.highlight(word);
+            row.highlight(self.file_type.highlighting_options(), word);
         }
     }
 

@@ -47,7 +47,7 @@ impl Row {
                     current_highlighting = highlighting_type;
                     let start_highlight =
                         format!("{}", termion::color::Fg(highlighting_type.to_color()));
-                    result.push_str(&start_highlight[..]);
+                    result.push_str(&*start_highlight);
                 }
 
                 if c == '\t' {
@@ -59,7 +59,7 @@ impl Row {
         }
         let end_highlight = format!("{}", termion::color::Fg(color::Reset));
         #[allow(clippy::string_slice)]
-        result.push_str(&end_highlight[..]);
+        result.push_str(&*end_highlight);
         result
     }
 
@@ -225,6 +225,7 @@ impl Row {
         }
 
         let mut prev_is_separator = true;
+        let mut in_string = false;
         let mut index = 0;
         while let Some(c) = chars.get(index) {
             if let Some(word) = word {
@@ -248,11 +249,37 @@ impl Row {
             } else {
                 &highlighting::Type::None
             };
+            if opts.strings() {
+                if in_string {
+                    highlighting.push(highlighting::Type::String);
+
+                    if *c == '\\' && index < self.len().saturating_sub(1) {
+                        highlighting.push(highlighting::Type::String);
+                        index = index.saturating_add(2);
+                        continue;
+                    }
+
+                    if *c == '"' {
+                        in_string = false;
+                        prev_is_separator = true;
+                    } else {
+                        prev_is_separator = false;
+                    }
+                    index = index.saturating_add(1);
+                    continue;
+                } else if prev_is_separator && *c == '"' {
+                    highlighting.push(highlighting::Type::String);
+                    in_string = true;
+                    prev_is_separator = true;
+                    index = index.saturating_add(1);
+                    continue;
+                }
+            }
 
             if opts.numbers() {
                 if (c.is_ascii_digit()
-                    && (prev_is_separator || previous_highlight == &highlighting::Type::Number))
-                    || (c == &'.' && previous_highlight == &highlighting::Type::Number)
+                    && (prev_is_separator || *previous_highlight == highlighting::Type::Number))
+                    || (*c == '.' && *previous_highlight == highlighting::Type::Number)
                 {
                     highlighting.push(highlighting::Type::Number);
                 } else {

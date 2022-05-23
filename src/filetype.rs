@@ -6,6 +6,7 @@ pub struct FileType {
 #[derive(Default, Copy, Clone)]
 pub struct HighlightingOptions {
     numbers: bool,
+    strings: bool,
 }
 
 impl Default for FileType {
@@ -39,7 +40,10 @@ impl FileType {
         {
             return Self {
                 name: String::from("Rust"),
-                hl_opts: HighlightingOptions { numbers: true },
+                hl_opts: HighlightingOptions {
+                    numbers: true,
+                    strings: true,
+                },
             };
         }
         Self::default()
@@ -47,9 +51,15 @@ impl FileType {
 }
 
 impl HighlightingOptions {
-    /// Return a boolean indiciating if we should highlight numbers or not
+    /// Return a boolean indicating if we should highlight numbers or not
     #[must_use]
     pub fn numbers(self) -> bool {
         self.numbers
+    }
+
+    /// Return a boolean indicating if we should highlight strings or not
+    #[must_use]
+    pub fn strings(self) -> bool {
+        self.strings
     }
 }

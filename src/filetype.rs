@@ -7,6 +7,7 @@ pub struct FileType {
 pub struct HighlightingOptions {
     numbers: bool,
     strings: bool,
+    characters: bool,
 }
 
 impl Default for FileType {
@@ -43,6 +44,7 @@ impl FileType {
                 hl_opts: HighlightingOptions {
                     numbers: true,
                     strings: true,
+                    characters: true,
                 },
             };
         }
@@ -61,5 +63,11 @@ impl HighlightingOptions {
     #[must_use]
     pub fn strings(self) -> bool {
         self.strings
+    }
+
+    /// Return a boolean indicating if we should highlight characters or not
+    #[must_use]
+    pub fn characters(self) -> bool {
+        self.characters
     }
 }

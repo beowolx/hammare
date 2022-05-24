@@ -4,10 +4,12 @@ pub struct FileType {
 }
 
 #[derive(Default, Copy, Clone)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct HighlightingOptions {
     numbers: bool,
     strings: bool,
     characters: bool,
+    comments: bool,
 }
 
 impl Default for FileType {
@@ -45,6 +47,7 @@ impl FileType {
                     numbers: true,
                     strings: true,
                     characters: true,
+                    comments: true,
                 },
             };
         }
@@ -69,5 +72,11 @@ impl HighlightingOptions {
     #[must_use]
     pub fn characters(self) -> bool {
         self.characters
+    }
+
+    /// Return a boolean indicating if we should highlight comments or not
+    #[must_use]
+    pub fn comments(self) -> bool {
+        self.comments
     }
 }

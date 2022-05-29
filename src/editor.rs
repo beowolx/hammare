@@ -466,7 +466,7 @@ impl Editor {
 
 fn die(e: &std::io::Error) {
     Terminal::clear_screen();
-    eprintln!("Unexpected behaviour while quitting the program. {e}");
+    eprintln!("Unexpected behavior while quitting the program. {e}");
     #[allow(clippy::exit)]
     process::exit(1)
 }

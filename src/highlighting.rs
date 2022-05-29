@@ -1,6 +1,6 @@
 use termion::color;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Type {
     None,
     Number,
@@ -10,8 +10,8 @@ pub enum Type {
     Comment
 }
 impl Type {
-    pub fn to_color(&self) -> impl color::Color {
-        match *self {
+    pub fn to_color(self) -> impl color::Color {
+        match self {
             Type::Number => color::Rgb(189, 147, 249),
             Type::Match => color::Rgb(38, 139, 210),
             Type::String => color::Rgb(241, 250, 140),

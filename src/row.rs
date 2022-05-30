@@ -222,8 +222,63 @@ impl Row {
         }
     }
 
+    /// Highligh a substring with a given type.
+    fn highlight_str(&mut self, index: &mut usize, substring: &str, chars: &[char], hl_type: highlighting::Type) -> bool {
+        if substring.is_empty() {
+            return false;
+        }
+
+        for (substring_index, c) in substring.chars().enumerate() {
+            if let Some(next_char) = chars.get(index.saturating_add(substring_index)) {
+                if *next_char != c {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        for _ in 0..substring.len() {
+            self.highlighting.push(hl_type);
+            *index = index.saturating_add(1);
+        }
+        true
+    }
+
+    /// Highligh keywords present in the vector of language's special keywords
+    fn highlight_keywords(&mut self, index: &mut usize, chars: &[char], keywords: &[String], hl_type: highlighting::Type) -> bool {
+        if *index > 0 {
+            let prev_char = chars.get(index.saturating_sub(1)).expect("Failed trying to index chars at `highlight_keywords` to get `prev_char`");
+            if !is_separator(*prev_char) {
+                return false;
+            }
+        }
+        
+        for word in keywords {
+            if *index < chars.len().saturating_sub(word.len()) {
+                let next_char = chars.get(index.saturating_add(word.len())).expect("Failed trying to index chars at `highlight_keywords` to get `next_char`");
+                if !is_separator(*next_char) {
+                    continue;
+                }
+            }
+            if self.highlight_str(index, word, chars, hl_type) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Highlight keywords present in the `highlight_primary_keywords` vector
+    fn highlight_primary_keywords(&mut self, index: &mut usize, opts: &HighlightingOptions, chars: &[char]) -> bool {
+        self.highlight_keywords(index, chars, opts.primary_keywords(), highlighting::Type::PrimaryKeywords)
+    }
+
+    /// Highlight keywords present in the `secondary_primary_keywords` vector
+    fn highlight_secondary_keywords(&mut self, index: &mut usize, opts: &HighlightingOptions, chars: &[char]) -> bool {
+        self.highlight_keywords(index, chars, opts.secondary_keywords(), highlighting::Type::SecondaryKeywords)
+    }
+
     /// Returns a boolean and does the logic to highlight a `char`
-    fn highlight_char(&mut self, index: &mut usize, opts: HighlightingOptions, c: char, chars: &[char]) -> bool {
+    fn highlight_char(&mut self, index: &mut usize, opts: &HighlightingOptions, c: char, chars: &[char]) -> bool {
         if opts.characters() && c == '\'' {
             if let Some(next_char) = chars.get(index.saturating_add(1)) {
                 let closing_index = if *next_char == '\\' {
@@ -247,7 +302,7 @@ impl Row {
     }
 
     /// Returns a boolean and does the logic to highlight a comment
-    fn highlight_comment(&mut self, index: &mut usize, opts: HighlightingOptions, c: char, chars: &[char]) -> bool {
+    fn highlight_comment(&mut self, index: &mut usize, opts: &HighlightingOptions, c: char, chars: &[char]) -> bool {
         if opts.comments() && c == '/' && *index < chars.len() {
             if let Some(next_char) = chars.get(index.saturating_add(1)) {
                 if *next_char == '/' {
@@ -263,7 +318,7 @@ impl Row {
     }
 
     /// Returns a boolean and does the logic to highlight a `string`
-    fn highlight_string(&mut self, index: &mut usize, opts: HighlightingOptions, c: char, chars: &[char]) -> bool {
+    fn highlight_string(&mut self, index: &mut usize, opts: &HighlightingOptions, c: char, chars: &[char]) -> bool {
         if opts.strings() && c == '"' {
             loop {
                 self.highlighting.push(highlighting::Type::String);
@@ -284,11 +339,11 @@ impl Row {
     }
 
     /// Returns a boolean and does the logic to highlight a number
-    fn highlight_number(&mut self, index: &mut usize, opts: HighlightingOptions, c: char, chars: &[char]) -> bool {
+    fn highlight_number(&mut self, index: &mut usize, opts: &HighlightingOptions, c: char, chars: &[char]) -> bool {
         if opts.numbers() && c.is_ascii_digit() {
             if *index > 0 {
                 let prev_char = chars.get(index.saturating_sub(1)).expect("Failed trying to index `chars` at `highlight_number()`");
-                if !prev_char.is_ascii_punctuation() && !prev_char.is_ascii_whitespace() {
+                if !is_separator(*prev_char) {
                     return false;
                 }
             }
@@ -310,12 +365,12 @@ impl Row {
 
     /// Check if any of the `HighlightingOptions` applies and if not,
     /// pushes to the `highlighting` vec `None`
-    pub fn highlight(&mut self, opts: HighlightingOptions, word: Option<&str>) {
+    pub fn highlight(&mut self, opts: &HighlightingOptions, word: Option<&str>) {
         self.highlighting = Vec::new();
         let chars: Vec<char> = self.string.chars().collect();
         let mut index = 0;
         while let Some(c) = chars.get(index) {
-            if self.highlight_char(&mut index, opts, *c, &chars) || self.highlight_comment(&mut index, opts, *c, &chars) || self.highlight_string(&mut index, opts, *c, &chars) || self.highlight_number(&mut index, opts, *c, &chars) {
+            if self.highlight_char(&mut index, opts, *c, &chars) || self.highlight_comment(&mut index, opts, *c, &chars) || self.highlight_primary_keywords(&mut index, opts, &chars) || self.highlight_secondary_keywords(&mut index, opts, &chars) || self.highlight_string(&mut index, opts, *c, &chars) || self.highlight_number(&mut index, opts, *c, &chars) {
                 continue;
             }
 
@@ -329,6 +384,10 @@ impl Row {
         self.highlight_match(word);
     }
 
+}
+
+fn is_separator(c: char) -> bool {
+    c.is_ascii_punctuation() || c.is_ascii_whitespace()
 }
 
 #[cfg(test)]

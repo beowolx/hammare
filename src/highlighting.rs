@@ -7,7 +7,9 @@ pub enum Type {
     Match,
     String,
     Character,
-    Comment
+    Comment,
+    PrimaryKeywords,
+    SecondaryKeywords
 }
 impl Type {
     pub fn to_color(self) -> impl color::Color {
@@ -17,6 +19,8 @@ impl Type {
             Type::String => color::Rgb(241, 250, 140),
             Type::Character => color::Rgb(108, 113, 196),
             Type::Comment => color::Rgb(98, 114, 164),
+            Type::PrimaryKeywords => color::Rgb(255, 121, 198),
+            Type::SecondaryKeywords => color::Rgb(139, 233, 253),
             Type::None => color::Rgb(255, 255, 255),
         }
     }

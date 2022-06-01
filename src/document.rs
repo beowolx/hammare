@@ -2,7 +2,6 @@ use crate::FileType;
 use crate::Position;
 use crate::Row;
 use crate::SearchDirection;
-use std::cmp::Ordering;
 use std::fs;
 use std::io::{Error, Write};
 
@@ -24,9 +23,7 @@ impl Document {
         let file_type = FileType::from(filename);
         let mut rows = Vec::new();
         for value in contents.lines() {
-            let mut row = Row::from(value);
-            row.highlight(file_type.highlighting_options(), None);
-            rows.push(row);
+            rows.push(Row::from(value));
         }
         Ok(Self {
             rows,
@@ -74,9 +71,7 @@ impl Document {
             .get_mut(at.y)
             .expect("Something unexpected happened while trying to index rows.");
 
-        let mut new_row = current_row.split(at.x);
-        current_row.highlight(self.file_type.highlighting_options(), None);
-        new_row.highlight(self.file_type.highlighting_options(), None);
+        let new_row = current_row.split(at.x);
 
         self.rows.insert(at.y.saturating_add(1), new_row);
     }
@@ -88,7 +83,6 @@ impl Document {
     ///
     /// It will panic if we try to insert in a position that is greater
     /// than the length of the document.
-    #[allow(clippy::panic)]
     pub fn insert(&mut self, at: &Position, c: char) {
         if at.y > self.rows.len() {
             return;
@@ -96,23 +90,22 @@ impl Document {
         self.dirty = true;
         if c == '\n' {
             self.insert_newline(at);
-            return;
+        } else if at.y == self.rows.len() {
+            let mut row = Row::default();
+            row.insert(0, c);
+            self.rows.push(row);
+        } else {
+            #[allow(clippy::indexing_slicing)]
+            let row = &mut self.rows[at.y];
+            row.insert(at.x, c);
         }
-        match at.y.cmp(&self.rows.len()) {
-            Ordering::Equal => {
-                let mut row = Row::default();
-                row.highlight(self.file_type.highlighting_options(), None);
-                row.insert(0, c);
-                self.rows.push(row);
-            }
-            Ordering::Less => {
-                let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
-                row.insert(at.x, c);
-                row.highlight(self.file_type.highlighting_options(), None);
-            }
-            Ordering::Greater => {
-                panic!("Insert characters pass the document's length is not possible.")
-            }
+        self.unhighlight_rows(at.y);
+    }
+
+    fn unhighlight_rows(&mut self, start: usize) {
+        let start = start.saturating_sub(1);
+        for row in self.rows.iter_mut().skip(start) {
+            row.is_highlighted = false;
         }
     }
 
@@ -128,12 +121,11 @@ impl Document {
             let next_row = self.rows.remove(at.y + 1);
             let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
             row.append(&next_row);
-            row.highlight(self.file_type.highlighting_options(), None);
         } else {
             let row = self.rows.get_mut(at.y).expect("Something unexpected happened while trying to get a mutable reference to the row index");
             row.delete(at.x);
-            row.highlight(self.file_type.highlighting_options(), None);
         }
+        self.unhighlight_rows(at.y);
     }
 
     /// Saves the changes in the document
@@ -149,7 +141,6 @@ impl Document {
             for row in &mut self.rows {
                 file.write_all(row.as_bytes())?;
                 file.write_all(b"\n")?;
-                row.highlight(self.file_type.highlighting_options(), None);
             }
             self.dirty = false;
         }
@@ -158,9 +149,22 @@ impl Document {
 
     /// Loop over the rows and highligh the words that correspond
     /// the word that was passed as a parameter.
-    pub fn highlight(&mut self, word: Option<&str>) {
-        for row in &mut self.rows {
-            row.highlight(self.file_type.highlighting_options(), word);
+    pub fn highlight(&mut self, word: &Option<String>, until: Option<usize>) {
+        let mut start_with_comment = false;
+        let until = if let Some(until) = until {
+            if until.saturating_add(1) < self.rows.len() {
+                until.saturating_add(1)
+            } else {
+                self.rows.len()
+            }
+        } else {
+            self.rows.len()
+        };
+
+        let rows_indexed = self.rows.get_mut(..until).expect("Failed while trying to index rows");
+        for row in rows_indexed {
+            start_with_comment = row.highlight(self.file_type.highlighting_options(), word, start_with_comment);
+        
         }
     }
 

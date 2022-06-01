@@ -8,6 +8,7 @@ use unicode_segmentation::UnicodeSegmentation;
 #[derive(Default)]
 pub struct Row {
     string: String,
+    pub is_highlighted: bool,
     highlighting: Vec<highlighting::Type>,
     len: usize,
 }
@@ -17,6 +18,7 @@ impl From<&str> for Row {
         Self {
             string: String::from(slice),
             highlighting: Vec::new(),
+            is_highlighted: false,
             len: slice.graphemes(true).count(),
         }
     }
@@ -141,9 +143,11 @@ impl Row {
 
         self.string = row;
         self.len = length;
+        self.is_highlighted = false;
         Self {
             string: splitted_row,
             len: splitted_length,
+            is_highlighted: false,
             highlighting: Vec::new(),
         }
     }
@@ -201,8 +205,8 @@ impl Row {
     }
 
     /// Highlight the matches found when user searchs for an element
-    fn highlight_match(&mut self, word: Option<&str>) {
-        if let Some(word) = word {
+    fn highlight_match(&mut self, word: &Option<String>) {
+        if let Some(ref word) = *word {
             if word.is_empty() {
                 return;
             }
@@ -317,6 +321,29 @@ impl Row {
         false
     }
 
+    fn highlight_multiline_comment(&mut self, index: &mut usize, opts: &HighlightingOptions, c: char, chars: &[char]) -> bool {
+        if opts.comments() && c == '/' && *index < chars.len() {
+            if let Some(next_char) = chars.get(index.saturating_add(1)) {
+                if *next_char == '*' {
+                    let indexed = self.string.get(index.saturating_add(2)..2).expect("Failed while trying to indexing string.").find("*/");
+
+                    let closing_index = if let Some(closing_index) = indexed {
+                        index.saturating_add(closing_index).saturating_add(4)
+                    } else {
+                        chars.len()
+                    };
+
+                    for _ in *index..closing_index {
+                        self.highlighting.push(highlighting::Type::MultilineComment);
+                        *index = index.saturating_add(1);
+                    }
+                    return true;
+                }
+            };
+        }
+        false
+    }
+
     /// Returns a boolean and does the logic to highlight a `string`
     fn highlight_string(&mut self, index: &mut usize, opts: &HighlightingOptions, c: char, chars: &[char]) -> bool {
         if opts.strings() && c == '"' {
@@ -365,11 +392,37 @@ impl Row {
 
     /// Check if any of the `HighlightingOptions` applies and if not,
     /// pushes to the `highlighting` vec `None`
-    pub fn highlight(&mut self, opts: &HighlightingOptions, word: Option<&str>) {
-        self.highlighting = Vec::new();
+    pub fn highlight(&mut self, opts: &HighlightingOptions, word: &Option<String>, start_with_comment: bool) -> bool {
         let chars: Vec<char> = self.string.chars().collect();
+        if self.is_highlighted && word.is_none() {
+            if let Some(hl_type) = self.highlighting.last() {
+                if *hl_type == highlighting::Type::MultilineComment && self.string.get(self.string.len().saturating_sub(2)..).expect("Failed while indexing string.") == "*/" {
+                    return true;
+                }
+            }
+            return false;
+        }
+        self.highlighting = Vec::new();
         let mut index = 0;
+        let mut in_ml_comment = start_with_comment;
+        if in_ml_comment {
+            let closing_index = if let Some(closing_index) = self.string.find("*/") {
+                closing_index.saturating_add(2)
+            } else {
+                chars.len()
+            };
+            for _ in 0..closing_index {
+                self.highlighting.push(highlighting::Type::MultilineComment);
+            }
+            index = closing_index;
+        }
         while let Some(c) = chars.get(index) {
+            if self.highlight_multiline_comment(&mut index, opts, *c, &chars) {
+                in_ml_comment = true;
+                continue;
+            }
+            in_ml_comment = false;
+
             if self.highlight_char(&mut index, opts, *c, &chars) || self.highlight_comment(&mut index, opts, *c, &chars) || self.highlight_primary_keywords(&mut index, opts, &chars) || self.highlight_secondary_keywords(&mut index, opts, &chars) || self.highlight_string(&mut index, opts, *c, &chars) || self.highlight_number(&mut index, opts, *c, &chars) {
                 continue;
             }
@@ -382,6 +435,13 @@ impl Row {
             index = index.saturating_add(1);
         }
         self.highlight_match(word);
+        let comment_range = self.string.get(self.string.len().saturating_sub(2)..).expect("Failed while trying to index string");
+        
+        if in_ml_comment && comment_range != "*/" {
+            return true;
+        }
+        self.is_highlighted = true;
+        false
     }
 
 }
@@ -408,7 +468,7 @@ mod test_super {
             highlighting::Type::None,
             highlighting::Type::None,
         ];
-        row.highlight_match(Some("t"));
+        row.highlight_match(&Some("t".to_owned()));
         assert_eq!(
             vec![
                 highlighting::Type::Number,

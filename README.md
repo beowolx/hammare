@@ -3,7 +3,7 @@
 Hammare (hammer in swedish) is a simple text editor inspired by `vim`. It lets you
 perform simple text edition operations directly in the terminal.
 
-🚧 It is a small project and still a working in progress. 🚧
+![screen-gif](./hammareDemo.gif)
 
 ## How to install it
 
